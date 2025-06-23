@@ -14,6 +14,5 @@ if data:
     full_text = "\n".join([para.text for para in doc.paragraphs])
 
     st.session_state["doc_text"]= full_text
-
     
     st.switch_page("page_2.py")
