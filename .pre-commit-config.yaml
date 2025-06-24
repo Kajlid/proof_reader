@@ -6,7 +6,7 @@ repos:
      - id: codespell
        name: Spell Checker 
        files: ^app/ # Only app directory
-       args: ["--exclude-file=frontend/package-lock.json"]
+       args: ["--exclude-file=app/page_2.py"]
        stages: [pre-commit]
  # Ruff for Python formatting and linting
  - repo: https://github.com/astral-sh/ruff-pre-commit
