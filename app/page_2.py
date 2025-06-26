@@ -2,6 +2,12 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
+from langchain_core.output_parsers.json import JsonOutputParser
+from langchain_core.runnables import Runnable
+from langchain_core.prompts import PromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+from claim_searcher import search_claims
 
 load_dotenv()
 
@@ -9,6 +15,13 @@ api_key = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel("gemini-2.0-flash-lite")
+llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", api_key=api_key)
+
+
+class GeminiRunnable(Runnable):
+    def invoke(self, input_str, config=None):
+        return model.generate_content(input_str).text
+
 
 st.set_page_config(layout="wide")
 col1, col2, col3 = st.columns([3, 1, 2])
@@ -40,7 +53,7 @@ with col3:
 
     if fact_check:
         st.markdown("### **Faktakontroll**")
-        prompt = f"""
+        claim_extr_prompt = PromptTemplate.from_template("""
         Du är en redaktörsassistent som arbetar med faktagranskning.
 
         Gå igenom följande text och extrahera endast de meningar eller stycken som innehåller sakliga påståenden - alltså fakta som skulle kunna kontrolleras genom en internetsökning.
@@ -64,13 +77,50 @@ with col3:
 
         Text att analysera:
         \"\"\"
-        {text}
+        {input_text}
         \"\"\"
-        """
+        """)
 
-        response = model.generate_content(prompt)
-        st.markdown(response.text)
-        feedback_text += "### Faktakontroll\n" + response.text + "\n\n"
+        chain = claim_extr_prompt | llm | JsonOutputParser()
+        response = chain.invoke({"input_text": text})
+        print("Type: ", type(response))
+
+        # response = model.generate_content(claim_extr_prompt)
+
+        result_list = search_claims(response)
+
+        for result in result_list:
+            claim = result["claim"]
+
+            st.markdown(f"### Påstående:\n{claim}")
+            feedback_text += f"{claim}\n"
+
+            search_results = result["results"]
+
+            evidence = ""
+
+            st.markdown("### Källor:")
+            for source in search_results:
+                title = source["title"]
+                url = source["url"]
+                content = source["content"]
+                evidence += content
+
+                st.page_link(url, label=title)
+
+                st.markdown(content)
+
+                feedback_text += f"{title}\n{url}\n{content}\n\n"
+
+            feedback_text += "\n"
+
+            fact_check_prompt = f"Här är ett påstående som ska kontrolleras: {claim}. Stämmer påståendet utifrån den här informationen: {evidence}? Svara med högst en mening"
+
+            response = model.generate_content(fact_check_prompt)
+            st.markdown(f"### Slutsats:\n{response.text}")
+            st.markdown(response.text)
+
+            # feedback_text += "### Faktakontroll\n" + response.text + "\n\n"
 
     if tone_check:
         st.markdown("### **Tonalitetskontroll**")
