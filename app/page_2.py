@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 import google.generativeai as genai
 from langchain_core.output_parsers.json import JsonOutputParser
+from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import Runnable
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -68,10 +69,6 @@ with col3:
         {{
             "påstående": "WWF bildades 1961 i Schweiz.",
             "sökfråga": "WWF bildades 1961 Schweiz"
-        }},
-        {{
-            "påstående": "Marie Curie upptäckte radium 1898.",
-            "sökfråga": "Marie Curie radium upptäckt 1898"
         }}
         ]
 
@@ -81,46 +78,57 @@ with col3:
         \"\"\"
         """)
 
-        chain = claim_extr_prompt | llm | JsonOutputParser()
-        response = chain.invoke({"input_text": text})
-        print("Type: ", type(response))
-
-        # response = model.generate_content(claim_extr_prompt)
+        extract_sources_chain = claim_extr_prompt | llm | JsonOutputParser()
+        response = extract_sources_chain.invoke({"input_text": text})
 
         result_list = search_claims(response)
 
-        for result in result_list:
-            claim = result["claim"]
+        for claim_with_source in result_list:
+            claim = claim_with_source["claim"]
 
             st.markdown(f"### Påstående:\n{claim}")
-            feedback_text += f"{claim}\n"
+            feedback_text += f"Påstående:\n{claim}\n"
 
-            search_results = result["results"]
+            search_results = claim_with_source["results"]
 
             evidence = ""
 
-            st.markdown("### Källor:")
+            st.markdown("### Relaterade källor:")
             for source in search_results:
                 title = source["title"]
                 url = source["url"]
                 content = source["content"]
                 evidence += content
 
-                st.page_link(url, label=title)
+                st.markdown(f"[🔗 {title}]({url})", unsafe_allow_html=True)
 
                 st.markdown(content)
 
-                feedback_text += f"{title}\n{url}\n{content}\n\n"
+                feedback_text += f"Källor: {title}\n{url}\n{content}\n\n"
 
             feedback_text += "\n"
 
-            fact_check_prompt = f"Här är ett påstående som ska kontrolleras: {claim}. Stämmer påståendet utifrån den här informationen: {evidence}? Svara med högst en mening"
+            fact_check_prompt = PromptTemplate.from_template(
+                """Här är ett påstående som ska kontrolleras: {claim}. 
+                Stämmer påståendet utifrån den här informationen (från sökresultat) som ska användas som underlag: {evidence}? 
+                
+                Din uppgift är att bedöma om påståendet:
+                - **Stöds av källor***
+                - **Motsägs av källor**
+                - **Osäkert, kan behövas undersökas närmare** (t.ex. om källorna är motstridiga eller inte direkt stödjer påståendet)
+                
+                Ange din slutsats med ett av dessa tre alternativ, följt av en kort motivering på högst en mening. Exempel:
 
-            response = model.generate_content(fact_check_prompt)
-            st.markdown(f"### Slutsats:\n{response.text}")
-            st.markdown(response.text)
+                Stöds av källor  \n
+                Motivering: Påståendet bekräftas direkt av en eller fler källor."""
+            )
 
-            # feedback_text += "### Faktakontroll\n" + response.text + "\n\n"
+            extract_sources_chain = fact_check_prompt | llm | StrOutputParser()
+            response = extract_sources_chain.invoke(
+                {"claim": claim, "evidence": evidence}
+            )
+            st.markdown(f"### Slutsats:\n{response}")
+            feedback_text += f"AI-slutsats:\n{response}"
 
     if tone_check:
         st.markdown("### **Tonalitetskontroll**")
