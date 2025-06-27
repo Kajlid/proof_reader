@@ -18,7 +18,16 @@ model = genai.GenerativeModel("gemini-2.0-flash-lite")
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", api_key=api_key)
 
 st.set_page_config(layout="wide")
-col1, col2, col3 = st.columns([3, 1, 2])
+
+check1, check2 = st.columns([0.005, 0.04], gap="small")
+with check1:
+    fact_check = st.checkbox("Faktakontroll")
+with check2:
+    tone_check = st.checkbox("Tonalitet")
+
+
+
+col1, col2 = st.columns([2, 1])
 
 with col1:
     with st.container(border=True):
@@ -27,23 +36,8 @@ with col1:
 
 
 with col2:
-    # Choice of suggestions
-    spell_check = st.checkbox("Stavningskontroll")
-    fact_check = st.checkbox("Faktakontroll")
-    tone_check = st.checkbox("Tonalitet")
-
-
-with col3:
     text = st.session_state["doc_text"]
     feedback_text = ""
-
-    if spell_check:
-        st.markdown("### **Stavningskontroll**")
-        prompt = f"Du är en språkgranskare med fokus på svensk stavning och grammatik. Läs igenom följande text och identifiera eventuella stavfel eller grammatiska fel. Identifiera endast faktiska stavfel eller grammatiska fel enligt vedertagen svensk språkstandard (till exempel enligt SAOL och Svenska skrivregler). Gör inte ändringar i egennamn, facktermer eller etablerade främmande ord om de är korrekta i sitt sammanhang. Ge en kort, tydlig och saklig kommentar (högst en mening) för varje fel du hittar. Om texten är korrekt, skriv ingenting. Ge bara feedback om du är helt säker. Tonen på feedbacken ska hållas vänlig, respektfull och saklig: {text}"
-
-        response = model.generate_content(prompt)
-        st.markdown(response.text)
-        feedback_text += "### Stavningskontroll\n" + response.text + "\n\n"
 
     if fact_check:
         st.markdown("### **Faktakontroll**")
