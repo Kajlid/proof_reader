@@ -2,6 +2,12 @@ import streamlit as st
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
+from langchain_core.output_parsers.json import JsonOutputParser
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+from claim_searcher import search_claims
 
 load_dotenv()
 
@@ -9,6 +15,7 @@ api_key = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel("gemini-2.0-flash-lite")
+llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", api_key=api_key)
 
 st.set_page_config(layout="wide")
 col1, col2, col3 = st.columns([3, 1, 2])
@@ -40,7 +47,7 @@ with col3:
 
     if fact_check:
         st.markdown("### **Faktakontroll**")
-        prompt = f"""
+        claim_extr_prompt = PromptTemplate.from_template("""
         Du är en redaktörsassistent som arbetar med faktagranskning.
 
         Gå igenom följande text och extrahera endast de meningar eller stycken som innehåller sakliga påståenden - alltså fakta som skulle kunna kontrolleras genom en internetsökning.
@@ -55,22 +62,67 @@ with col3:
         {{
             "påstående": "WWF bildades 1961 i Schweiz.",
             "sökfråga": "WWF bildades 1961 Schweiz"
-        }},
-        {{
-            "påstående": "Marie Curie upptäckte radium 1898.",
-            "sökfråga": "Marie Curie radium upptäckt 1898"
         }}
         ]
 
         Text att analysera:
         \"\"\"
-        {text}
+        {input_text}
         \"\"\"
-        """
+        """)
 
-        response = model.generate_content(prompt)
-        st.markdown(response.text)
-        feedback_text += "### Faktakontroll\n" + response.text + "\n\n"
+        extract_sources_chain = claim_extr_prompt | llm | JsonOutputParser()
+        response = extract_sources_chain.invoke({"input_text": text})
+
+        result_list = search_claims(response)
+
+        for claim_with_source in result_list:
+            claim = claim_with_source["claim"]
+
+            st.markdown(f"### Påstående:\n{claim}")
+            feedback_text += f"Påstående:\n{claim}\n"
+
+            search_results = claim_with_source["results"]
+
+            evidence = ""
+
+            st.markdown("### Relaterade källor:")
+            for source in search_results:
+                title = source["title"]
+                url = source["url"]
+                content = source["content"]
+                evidence += content
+
+                # Display title with a hyperlink to the URL
+                st.markdown(f"[🔗 {title}]({url})", unsafe_allow_html=True)
+
+                st.markdown(content)
+
+                feedback_text += f"Källor: {title}\n{url}\n{content}\n\n"
+
+            feedback_text += "\n"
+
+            fact_check_prompt = PromptTemplate.from_template(
+                """Här är ett påstående som ska kontrolleras: {claim}. 
+                Stämmer påståendet utifrån den här informationen (från sökresultat) som ska användas som underlag: {evidence}? 
+                
+                Din uppgift är att bedöma om påståendet:
+                - **Stöds av källor***
+                - **Motsägs av källor**
+                - **Osäkert, kan behövas undersökas närmare** (t.ex. om källorna är motstridiga eller inte direkt stödjer påståendet)
+                
+                Ange din slutsats med ett av dessa tre alternativ, följt av en kort motivering på högst en mening. Exempel:
+
+                Stöds av källor  \n
+                Motivering: Påståendet bekräftas direkt av en eller fler källor."""
+            )
+
+            extract_sources_chain = fact_check_prompt | llm | StrOutputParser()
+            response = extract_sources_chain.invoke(
+                {"claim": claim, "evidence": evidence}
+            )
+            st.markdown(f"### Slutsats:\n{response}")
+            feedback_text += f"AI-slutsats:\n{response}"
 
     if tone_check:
         st.markdown("### **Tonalitetskontroll**")
