@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 from langchain_core.output_parsers.json import JsonOutputParser
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import Runnable
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -17,12 +16,6 @@ api_key = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel("gemini-2.0-flash-lite")
 llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", api_key=api_key)
-
-
-class GeminiRunnable(Runnable):
-    def invoke(self, input_str, config=None):
-        return model.generate_content(input_str).text
-
 
 st.set_page_config(layout="wide")
 col1, col2, col3 = st.columns([3, 1, 2])
@@ -100,6 +93,7 @@ with col3:
                 content = source["content"]
                 evidence += content
 
+                # Display title with a hyperlink to the URL
                 st.markdown(f"[🔗 {title}]({url})", unsafe_allow_html=True)
 
                 st.markdown(content)
