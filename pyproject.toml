@@ -5,8 +5,10 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
+    "accelerate>=1.8.1",
     "google-generativeai>=0.8.5",
     "langchain>=0.3.26",
+    "langchain-community>=0.3.27",
     "langchain-google-genai>=2.0.10",
     "langchain-tavily>=0.2.4",
     "pre-commit>=2.21.0",
@@ -14,4 +16,6 @@ dependencies = [
     "python-dotenv>=0.21.1",
     "streamlit>=1.23.1",
     "tavily-python>=0.7.8",
+    "torch>=2.7.1",
+    "transformers>=4.53.2",
 ]
