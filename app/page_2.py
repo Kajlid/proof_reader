@@ -254,21 +254,20 @@ with col2:
 
         block_limit = 4
 
-        # Display either preview or full output
+        def show_more():
+            st.session_state.show_full_text = True
 
+        def show_less():
+            st.session_state.show_full_text = False
+
+        # Display either preview or full output
         if st.session_state.show_full_text:
             for block in st.session_state.tonality_blocks:
                 st.markdown(block.strip())
                 st.markdown("---")
-            if st.button("Visa mindre"):
-                st.session_state.show_full_text = False
+            st.button("Visa mindre", on_click=show_less)
         else:
             for block in st.session_state.tonality_blocks[:block_limit]:
                 st.markdown(block.strip())
                 st.markdown("---")
-
-            if st.button("Visa mer"):
-                st.session_state.show_full_text = True
-
-    # Downloading the result file
-    # st.download_button("Ladda ned feedback", feedback_text, file_name="feedback.txt")
+            st.button("Visa mer", on_click=show_more)
