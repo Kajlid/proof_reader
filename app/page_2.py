@@ -7,7 +7,6 @@ from langchain_core.output_parsers.json import JsonOutputParser
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
-
 from claim_searcher import search_claims
 
 load_dotenv()
@@ -15,8 +14,10 @@ load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=api_key)
-llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash-lite", api_key=api_key)
+llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", api_key=api_key)
 
+if "feedback_text" not in st.session_state:
+    st.session_state.feedback_text = ""
 
 st.set_page_config(layout="wide")
 
@@ -41,16 +42,6 @@ with top_col1:
 st.markdown(
     '<h1 style="text-align: center;"> Textgranskare </h1>', unsafe_allow_html=True
 )
-
-
-col1, col2 = st.columns([0.05, 0.04], gap="small")
-with col1:
-    selected_option = st.radio(
-        "Välj granskningstyp",
-        ["Faktakontroll", "Tonalitet"],
-        horizontal=True,
-        label_visibility="collapsed",
-    )
 
 
 @st.cache_data(show_spinner="Söker och hämtar relaterade källor...")
@@ -108,23 +99,28 @@ def get_tonality_feedback(text):
 
 col1, col2 = st.columns([2, 1])
 
-feedback_text = ""
-
 with col1:
+    selected_option = st.radio(
+        "Välj granskningstyp",
+        ["Faktakontroll", "Tonalitet"],
+        horizontal=True,
+        label_visibility="collapsed",
+    )
     with st.container(border=True):
         if "doc_text" in st.session_state:
             st.markdown(st.session_state["doc_text"])
 
 
 with col2:
+    download_button_placeholder = st.empty()
+
     text = st.session_state["doc_text"]
 
     # FAKTAKOLL
     if selected_option == "Faktakontroll":
-        st.download_button(
-            "Ladda ned feedback", feedback_text, file_name="feedback.txt"
-        )
-        st.markdown("### **Faktakontroll**")
+        st.markdown("## **Faktakontroll**")
+
+        st.session_state.feedback_text = ""  # removes previous text
 
         with st.spinner("Söker och hämtar relaterade källor..."):
             claim_extr_prompt = PromptTemplate.from_template("""
@@ -159,8 +155,8 @@ with col2:
         for claim_with_source in result_list:
             claim = claim_with_source["claim"]
 
-            st.markdown(f"### Påstående:\n{claim}")
-            feedback_text += f"Påstående:\n{claim}\n"
+            st.markdown(f"#### Påstående:\n{claim}")
+            st.session_state.feedback_text += f"Påstående:\n\n{claim}\n\n"
 
             search_results = claim_with_source["results"]
 
@@ -172,12 +168,12 @@ with col2:
                 Om du hittar en exakt eller väldigt lik formulering som påståendet bör denna tas med.
                 Om direkta siffror nämns så bör du försöka hitta de exakta siffrorna i texten som hör ihop med formuleringen i påståendet.
                 Generera inte nytt innehåll, utan plocka ut de sammanhängande meningarna i texten som överensstämmer mest med ämnet. 
-                Skapa ingen punktlista, utan skriv bara meningarna efter varandra, utan citattecken. Ta inte med någon ytterligare förklaring utan skriv bara ut meningarna som de är.
+                Skapa ingen punktlista eller numrerad lista, utan skriv bara meningarna efter varandra, utan citattecken. Ta inte med någon ytterligare förklaring utan skriv bara ut meningarna som de är.
                 Om du inte kan extrahera meningar, lämna då svaret som en tom sträng, utan kommentar.
                 """
             )
 
-            st.markdown("### Relaterade källor:")
+            st.markdown("#### Relaterade källor:")
             for source in search_results:
                 title = source["title"]
                 url = source["url"]
@@ -188,17 +184,11 @@ with col2:
 
                 create_content_chain = summarize_prompt | llm | StrOutputParser()
 
-                # new_content = create_content_chain.invoke(        # invoke
-                # {"content": content, "claim": claim}
-                # )
-
-                response_stream = create_content_chain.stream(
+                response_stream = create_content_chain.stream(  # calls invoke
                     {"content": content, "claim": claim}
                 )
 
-                # evidence += new_content
-
-                output = st.empty()  # Create an empty placeholder
+                output = st.empty()  # Create an empty placeholder for streamed output
                 tokens = ""
 
                 for chunk in response_stream:
@@ -208,11 +198,9 @@ with col2:
                 new_content = tokens
                 evidence += new_content
 
-                # st.markdown(new_content)
+                st.session_state.feedback_text += f"Källor:\n\n {title}\n{url}\n"
 
-                feedback_text += f"Källor: {title}\n{url}\n{content}\n\n"
-
-            feedback_text += "\n"
+            st.session_state.feedback_text += "\n"
 
             fact_check_prompt = PromptTemplate.from_template(
                 """Här är ett påstående som ska kontrolleras: {claim}. 
@@ -233,19 +221,34 @@ with col2:
             response = extract_sources_chain.invoke(
                 {"claim": claim, "evidence": evidence}
             )
-            st.markdown(f"### Slutsats:\n{response}")
-            feedback_text += f"AI-slutsats:\n{response}"
+
+            st.markdown(f"#### Slutsats:\n{response}")
+            st.markdown("---")
+            st.session_state.feedback_text += f"AI-slutsats:\n{response}"
+
+            download_button_placeholder.download_button(
+                "Ladda ned feedback",
+                st.session_state.feedback_text,
+                file_name="faktakontroll.txt",
+                key="save_fact_check",
+            )
 
     # TONALITETSKOLL
     elif selected_option == "Tonalitet":
-        st.download_button(
-            "Ladda ned feedback", feedback_text, file_name="feedback.txt"
-        )
-        st.markdown("### **Tonalitetskontroll**")
+        st.markdown("## **Tonalitetskontroll**")
+
+        st.session_state.feedback_text = ""
 
         full_text = get_tonality_feedback(text)
 
-        feedback_text += "### Tonalitetskontroll\n" + full_text + "\n\n"
+        st.session_state.feedback_text += "Tonalitetskontroll\n" + full_text + "\n\n"
+
+        download_button_placeholder.download_button(
+            "Ladda ned feedback",
+            st.session_state.feedback_text,
+            file_name="tonalitetsfeedback.txt",
+            key="save_tone_check",
+        )
 
         if "tonality_blocks" not in st.session_state:
             raw_blocks = re.split(r"\n(?=\*\*Original\*\*:)", full_text.strip())
