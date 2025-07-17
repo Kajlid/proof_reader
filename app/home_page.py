@@ -4,9 +4,14 @@ import docx
 st.set_page_config(layout="centered")
 
 # Main page content
-st.markdown("# Upload file")
+st.markdown(
+    '<h1 style="text-align: center;"> Textgranskare </h1>', unsafe_allow_html=True
+)
 
-data = st.file_uploader("Upload a Word document", type=["docx"])
+st.markdown("<br><br><br><br>", unsafe_allow_html=True)
+
+
+data = st.file_uploader("Ladda upp ett Word dokument", type=["docx"])
 
 if data:
     doc = docx.Document(data)

@@ -30,10 +30,23 @@ st.markdown(
         .block-container {
             padding-top: 3rem;
         }
+
+        .custom-article-box {
+        background-color: #fffdfd;  /* tropical yellow */
+        padding: 1.5rem;
+        border-radius: 10px;
+        border: 1px solid #e08e79;
+        max-height: 850px;          /* adjust height as needed */
+        overflow-y: auto;
+        }
+
+        .custom-article-box::-webkit-scrollbar {
+        display: none;  /* hide scrollbar */
+        }
     </style>
-""",
-    unsafe_allow_html=True,
+""", unsafe_allow_html=True,
 )
+
 
 # Back button
 top_col1, _, _ = st.columns([0.1, 0.8, 0.1])
@@ -119,9 +132,15 @@ with col1:
         horizontal=True,
         label_visibility="collapsed",
     )
-    with st.container(border=True):
-        if "doc_text" in st.session_state:
-            st.markdown(st.session_state["doc_text"])
+    
+    st.markdown(
+        f"""
+        <div class="custom-article-box">
+            {st.session_state["doc_text"]}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
 with col2:
