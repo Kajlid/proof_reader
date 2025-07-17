@@ -11,7 +11,7 @@ tavily_key = os.getenv("TAVILY_API_KEY")
 
 search_tool = TavilySearch(
     max_results=3,
-    include_domains=["wwf.se", "worldwildlife.org", "britannica.com", "nature.com"],
+    include_domains=["wwf.se", "worldwildlife.org", "britannica.com", "nature.com", "https://artfakta.se/", "naturvardsverket.se", "slu.se", "nationalgeographic.com"],
 )
 
 
