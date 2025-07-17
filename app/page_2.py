@@ -14,7 +14,7 @@ load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=api_key)
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", api_key=api_key)
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite-preview-06-17", api_key=api_key)
 
 if "feedback_text" not in st.session_state:
     st.session_state.feedback_text = ""
@@ -52,6 +52,9 @@ st.markdown(
 top_col1, _, _ = st.columns([0.1, 0.8, 0.1])
 with top_col1:
     if st.button("Back"):
+        for key in ["factcheck_results", "feedback_text", "factcheck_rendered", "tonality_blocks", "show_full_text"]:
+            if key in st.session_state:
+                del st.session_state[key]
         st.switch_page("home_page.py")
 
 
@@ -68,11 +71,15 @@ def get_claim_search_output(text):
             Gå igenom följande text och extrahera endast de meningar eller stycken som innehåller sakliga påståenden - alltså fakta som skulle kunna kontrolleras genom en internetsökning.
 
             Gör följande:
-            1. Identifiera två faktapåståenden och kopiera det ordagrant.
+            1. Identifiera fyra faktapåståenden och kopiera det ordagrant.
+                - Faktapåståendena ska vara självständiga, fullständiga (dvs. inga syftningar som "båda", "de", "han", "detta"), och konkreta (innehåller namn på t.ex. plats, person, art, organisation, årtal etc.)
             2. Uteslut allt som är subjektivt, spekulativt, innehåller värderingar, eller inte går att verifiera via internet.
-            3. Uteslut påståenden som innehåller personnamn.
-            4. För varje påstående, formulera en fokuserad sökfråga (till exempel en Google-sökning) som kan användas för att kontrollera sanningshalten.
-            5. Lista resultatet i detta format:
+            3. Uteslut påståenden med oklara syftningar (t.ex. "båda arterna", "den här lagen", "det").
+            4. Uteslut påståenden som innehåller personnamn.
+            5. Uteslut påståenden som saknar specifika uppgifter som plats, tid, kvantitet, namn eller händelse.
+            5. Uteslut påståenden som är allmänt hållet och inte går att kontrollera med en tydlig faktasökning (t.ex. "Men klimatförändringarna och förlusterna av djur och natur pågår samtidigt, hela tiden.").
+            6. För varje påstående, formulera en naturlig frågeformulering (t.ex. en Googlesökning) som är så informativ som möjligt. Undvik sökfraser med bara namn eller siffror. Tänk: "Hur hög är...", "Vad innebär det att...", "När grundades..." etc.
+            7. Lista resultatet i detta format:
 
             [
             {{
@@ -187,6 +194,7 @@ with col2:
                         - Skriv *INTE* ut det returnerade resultatet som numrerade listor. 
                         - Skriv meningarna utan citattecken. 
                         - Om du inte kan extrahera meningar, lämna då svaret som en tom sträng, utan kommentar.
+                        - En källa räknas inte som relevant text.
                         """
                     )
 
@@ -230,7 +238,10 @@ with col2:
                         Ange din slutsats med ett av dessa tre alternativ, följt av en kort motivering på högst en mening. Exempel:
 
                         Påståendet stöds av källor  \n
-                        Motivering: Påståendet bekräftas direkt av en eller fler källor."""
+                        Motivering: Påståendet bekräftas direkt av en eller fler källor.
+
+                        Om ingen information kan extraheras från någon av källorna, skriv då "Ingen information hittades i källorna."
+                        """
                     )
 
                     extract_sources_chain = fact_check_prompt | llm | StrOutputParser()
