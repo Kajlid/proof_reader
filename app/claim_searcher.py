@@ -17,8 +17,12 @@ search_tool = TavilySearch(
 
 def search_and_extract(query, search_tool, extract_tool):
     search = search_tool.invoke({"query": query})
+
+    # lägg till felhantering här
+    
     search_results = search["results"]
     refined_results = []
+
     for res in search_results:
         url = res["url"]
         extraction = extract_tool.invoke({"urls": [url]})

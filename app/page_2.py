@@ -19,6 +19,9 @@ llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", api_key=api_key)
 if "feedback_text" not in st.session_state:
     st.session_state.feedback_text = ""
 
+if "factcheck_rendered" not in st.session_state:
+    st.session_state.factcheck_rendered = False
+
 st.set_page_config(layout="wide")
 
 st.markdown(
@@ -52,7 +55,7 @@ def get_claim_search_output(text):
             Gå igenom följande text och extrahera endast de meningar eller stycken som innehåller sakliga påståenden - alltså fakta som skulle kunna kontrolleras genom en internetsökning.
 
             Gör följande:
-            1. Identifiera varje faktapåstående och kopiera det ordagrant.
+            1. Identifiera två faktapåståenden och kopiera det ordagrant.
             2. Uteslut allt som är subjektivt, spekulativt, innehåller värderingar, eller inte går att verifiera via internet.
             3. Uteslut påståenden som innehåller personnamn.
             4. För varje påstående, formulera en fokuserad sökfråga (till exempel en Google-sökning) som kan användas för att kontrollera sanningshalten.
@@ -80,7 +83,8 @@ def get_claim_search_output(text):
 
 @st.cache_data(show_spinner="Genererar tonalitetsfeedback...")
 def get_tonality_feedback(text):
-    prompt = f"""Jag vill att du hjälper mig att justera tonaliteten i en text. Målet är att få texten att låta mer trovärdig och naturlig, utan att ändra dess innebörd eller fakta. Följ de här fyra stegen:
+    prompt = f"""Jag vill att du hjälper mig att justera tonaliteten i en text. Målet är att få texten att låta mer trovärdig och naturlig, utan att ändra dess innebörd eller fakta. 
+    Det är viktigt att du inte börjar outputen med exempelvis "Här är en justering av texten, steg för steg:". Följ de här fyra stegen:
 
     1.Identifiera formuleringar som behöver förtydligas, samt formuleringar som har ett dåligt flyt eller en för slapp ton. Leta efter ord eller uttryck som innehåller överdrifter eller personliga värderingar.
     2.Förklara kort varför varje uttryck du identifierar är otydligt eller har dåligt flyt.
@@ -129,94 +133,100 @@ with col2:
     if selected_option == "Faktakontroll":
         st.markdown("## **Faktakontroll**")
 
-        st.session_state.feedback_text = ""  # removes previous text
+        if "factcheck_results" not in st.session_state:
+            st.session_state.factcheck_results = get_claim_search_output(text)
+            st.session_state.feedback_text = ""  # Skriv bara över vid första körning
 
-        result_list = get_claim_search_output(text)
+        if not st.session_state.factcheck_rendered:
 
-        with st.container(border=False, height=900):
-            for idx, claim_with_source in enumerate(result_list):
-                claim = claim_with_source["claim"]
+            with st.container(border=False, height=900):
+                #for idx, claim_with_source in enumerate(st.session_state.factcheck_results):
+                #for idx, claim_with_source in enumerate(result_list):
+                for claim_with_source in st.session_state.factcheck_results:
+                    claim = claim_with_source["claim"]
 
-                st.markdown(f"#### Påstående:\n{claim}")
-                st.session_state.feedback_text += f"Påstående:\n\n{claim}\n\n"
+                    st.markdown(f"#### Påstående:\n{claim}")
+                    st.session_state.feedback_text += f"#### Påstående:\n{claim}\n\n"
 
-                search_results = claim_with_source["results"]
+                    search_results = claim_with_source["results"]
 
-                evidence = ""
+                    evidence = ""
 
-                summarize_prompt = PromptTemplate.from_template(
-                    """Här är ett text: {content} och ett påstående: {claim}
-                    
-                    Din uppgift är att plocka ut 2-3 hela meningar från denna texten. 
-                    
-                    Regler:
-                    - Utgå ifrån de delar av texten som aktivt svarar på påståendet, så andra orelaterade delar av texten bör ignoreras.
-                    - Ta inte med någon ytterligare förklaring utan skriv bara ut meningarna som de är.
-                    - Om du hittar en exakt eller väldigt lik formulering som påståendet bör denna tas med.
-                    - Om direkta siffror nämns så bör du försöka hitta de exakta siffrorna i texten som hör ihop med formuleringen i påståendet.
-                    - Generera inte nytt innehåll, utan plocka ut meningar i texten som överensstämmer mest med ämnet.
-                    - Skriv ihop det som ett sammanhängande stycke i flytande text. 
-                    - Skriv *INTE* ut resultatet som en punktlista.
-                    - Skriv *INTE* ut det returnerade resultatet som numrerade listor. 
-                    - Skriv meningarna utan citattecken. 
-                    - Om du inte kan extrahera meningar, lämna då svaret som en tom sträng, utan kommentar.
-                    """
-                )
-
-                st.markdown("#### Relaterade källor:")
-
-                for source in search_results:
-                    title = source["title"]
-                    url = source["url"]
-                    content = source["content"]
-
-                    # Display title with a hyperlink to the URL
-                    st.markdown(f"[🔗 {title}]({url})", unsafe_allow_html=True)
-
-                    create_content_chain = summarize_prompt | llm | StrOutputParser()
-
-                    output = (
-                        st.empty()
-                    )  # Create an empty placeholder for streamed output
-                    tokens = ""
-                    response = create_content_chain.invoke(  # Replace with stream for streamed text generation
-                        {"content": content, "claim": claim}
+                    summarize_prompt = PromptTemplate.from_template(
+                        """Här är ett text: {content} och ett påstående: {claim}
+                        
+                        Din uppgift är att plocka ut 2-3 hela meningar från denna texten. 
+                        
+                        Regler:
+                        - Utgå ifrån de delar av texten som aktivt svarar på påståendet, så andra orelaterade delar av texten bör ignoreras.
+                        - Ta inte med någon ytterligare förklaring utan skriv bara ut meningarna som de är.
+                        - Om du hittar en exakt eller väldigt lik formulering som påståendet bör denna tas med.
+                        - Om direkta siffror nämns så bör du försöka hitta de exakta siffrorna i texten som hör ihop med formuleringen i påståendet.
+                        - Generera inte nytt innehåll, utan plocka ut meningar i texten som överensstämmer mest med ämnet.
+                        - Skriv ihop det som ett sammanhängande stycke i flytande text. 
+                        - Skriv *INTE* ut resultatet som en punktlista.
+                        - Skriv *INTE* ut det returnerade resultatet som numrerade listor. 
+                        - Skriv meningarna utan citattecken. 
+                        - Om du inte kan extrahera meningar, lämna då svaret som en tom sträng, utan kommentar.
+                        """
                     )
 
-                    for chunk in response:
-                        tokens += chunk
+                    st.markdown("#### Relaterade källor:")
+                    st.session_state.feedback_text += "#### Relaterade källor:\n\n"
+                    for source in search_results:
+                        title = source["title"]
+                        url = source["url"]
+                        content = source["content"]
+
+                        # Display title with a hyperlink to the URL
+                        st.markdown(f"[🔗 {title}]({url})", unsafe_allow_html=True)
+
+                        create_content_chain = summarize_prompt | llm | StrOutputParser()
+
+                        output = (
+                            st.empty()
+                        )  # Create an empty placeholder for streamed output
+
+                        tokens = create_content_chain.invoke(  # Replace with stream for streamed text generation
+                            {"content": content, "claim": claim}
+                        )
                         output.markdown(tokens)
+                        new_content = tokens
+                        evidence += new_content
 
-                    new_content = tokens
-                    evidence += new_content
+                        st.session_state.feedback_text += f"[🔗 {title}]({url})\n\n"
+                        st.session_state.feedback_text += f"{tokens}\n\n"
 
-                    st.session_state.feedback_text += f"Källor:\n\n {title}\n{url}\n"
+                    st.session_state.feedback_text += "\n"
 
-                st.session_state.feedback_text += "\n"
+                    fact_check_prompt = PromptTemplate.from_template(
+                        """Här är ett påstående som ska kontrolleras: {claim}. 
+                        Stämmer påståendet utifrån den här informationen (från sökresultat) som ska användas som underlag: {evidence}? 
+                        
+                        Din uppgift är att bedöma om påståendet:
+                        - **Påståendet stöds av källor***
+                        - **Påståendet motsägs av källor**
+                        - **Osäkert, kan behövas undersökas närmare** (t.ex. om källorna är motstridiga eller inte direkt stödjer påståendet)
+                        
+                        Ange din slutsats med ett av dessa tre alternativ, följt av en kort motivering på högst en mening. Exempel:
 
-                fact_check_prompt = PromptTemplate.from_template(
-                    """Här är ett påstående som ska kontrolleras: {claim}. 
-                    Stämmer påståendet utifrån den här informationen (från sökresultat) som ska användas som underlag: {evidence}? 
-                    
-                    Din uppgift är att bedöma om påståendet:
-                    - **Påståendet stöds av källor***
-                    - **Påståendet motsägs av källor**
-                    - **Osäkert, kan behövas undersökas närmare** (t.ex. om källorna är motstridiga eller inte direkt stödjer påståendet)
-                    
-                    Ange din slutsats med ett av dessa tre alternativ, följt av en kort motivering på högst en mening. Exempel:
+                        Påståendet stöds av källor  \n
+                        Motivering: Påståendet bekräftas direkt av en eller fler källor."""
+                    )
 
-                    Påståendet stöds av källor  \n
-                    Motivering: Påståendet bekräftas direkt av en eller fler källor."""
-                )
+                    extract_sources_chain = fact_check_prompt | llm | StrOutputParser()
+                    response = extract_sources_chain.invoke(
+                        {"claim": claim, "evidence": evidence}
+                    )
 
-                extract_sources_chain = fact_check_prompt | llm | StrOutputParser()
-                response = extract_sources_chain.invoke(
-                    {"claim": claim, "evidence": evidence}
-                )
+                    st.markdown(f"#### Slutsats:\n{response}")
+                    st.markdown("---")
+                    st.session_state.feedback_text += f"#### Slutsats:\n{response}\n\n"
 
-                st.markdown(f"#### Slutsats:\n{response}")
-                st.markdown("---")
-                st.session_state.feedback_text += f"AI-slutsats:\n{response}"
+            st.session_state.factcheck_rendered = True
+        else:
+            # Just show previously generated feedback
+            st.markdown(st.session_state.feedback_text)
 
         download_button_placeholder.download_button(
             "Ladda ned feedback",
@@ -247,7 +257,7 @@ with col2:
             st.session_state.tonality_blocks = raw_blocks
             st.session_state.show_full_text = False
 
-        block_limit_tone = 4
+        block_limit_tone = 2
 
         # Display either preview or full output
         if st.session_state.show_full_text:
