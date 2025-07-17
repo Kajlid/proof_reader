@@ -2,5 +2,9 @@
 showSidebarNavigation = false
 
 [theme]
-base="light"
-primaryColor="#504949"
+base = "light"
+primaryColor = "#e08e79"              # Peachy-pink (buttons, highlights, hover effect)
+backgroundColor = "#FFEDEA"           # Very soft peach (main background)
+secondaryBackgroundColor = "#ffffff"  # White cards/panels
+textColor = "#402218"                 # Dark warm brown (for contrast)
+font = "sans serif"
