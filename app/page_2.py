@@ -14,10 +14,14 @@ load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=api_key)
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite-preview-06-17", api_key=api_key)
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", api_key=api_key)
 
-if "feedback_text" not in st.session_state:
-    st.session_state.feedback_text = ""
+
+if "factcheck_feedback_text" not in st.session_state:
+    st.session_state.factcheck_feedback_text = ""
+
+if "tonality_feedback_text" not in st.session_state:
+    st.session_state.tonality_feedback_text = ""
 
 if "factcheck_rendered" not in st.session_state:
     st.session_state.factcheck_rendered = False
@@ -52,7 +56,7 @@ st.markdown(
 top_col1, _, _ = st.columns([0.1, 0.8, 0.1])
 with top_col1:
     if st.button("Back"):
-        for key in ["factcheck_results", "feedback_text", "factcheck_rendered", "tonality_blocks", "show_full_text"]:
+        for key in ["factcheck_results", "factcheck_feedback_text", "tonality_feedback_text", "factcheck_rendered", "tonality_blocks", "show_full_text"]:
             if key in st.session_state:
                 del st.session_state[key]
         st.switch_page("home_page.py")
@@ -71,13 +75,13 @@ def get_claim_search_output(text):
             Gå igenom följande text och extrahera endast de meningar eller stycken som innehåller sakliga påståenden - alltså fakta som skulle kunna kontrolleras genom en internetsökning.
 
             Gör följande:
-            1. Identifiera fyra faktapåståenden och kopiera det ordagrant.
+            1. Identifiera varje faktapåstående och kopiera det ordagrant.
                 - Faktapåståendena ska vara självständiga, fullständiga (dvs. inga syftningar som "båda", "de", "han", "detta"), och konkreta (innehåller namn på t.ex. plats, person, art, organisation, årtal etc.)
-            2. Uteslut allt som är subjektivt, spekulativt, innehåller värderingar, eller inte går att verifiera via internet.
-            3. Uteslut påståenden med oklara syftningar (t.ex. "båda arterna", "den här lagen", "det").
-            4. Uteslut påståenden som innehåller personnamn.
-            5. Uteslut påståenden som saknar specifika uppgifter som plats, tid, kvantitet, namn eller händelse.
-            5. Uteslut påståenden som är allmänt hållet och inte går att kontrollera med en tydlig faktasökning (t.ex. "Men klimatförändringarna och förlusterna av djur och natur pågår samtidigt, hela tiden.").
+                - Uteslut allt som är subjektivt, spekulativt, innehåller värderingar, eller inte går att verifiera via internet.
+                - Uteslut påståenden med oklara syftningar (t.ex. "båda arterna", "den här lagen", "det", "jag").
+                - Uteslut påståenden som innehåller personnamn.
+                - Uteslut påståenden som saknar specifika uppgifter som plats, tid, kvantitet, namn eller händelse.
+                - Uteslut påståenden som är allmänt hållet och inte går att kontrollera med en tydlig faktasökning (t.ex. "Men klimatförändringarna och förlusterna av djur och natur pågår samtidigt, hela tiden.").
             6. För varje påstående, formulera en naturlig frågeformulering (t.ex. en Googlesökning) som är så informativ som möjligt. Undvik sökfraser med bara namn eller siffror. Tänk: "Hur hög är...", "Vad innebär det att...", "När grundades..." etc.
             7. Lista resultatet i detta format:
 
@@ -115,7 +119,8 @@ def get_tonality_feedback(text):
     **Kommentar**: [kort förklaring till varför det är subjektivt] \n
     **Omskrivning**: [neutral version] \n
         
-                    
+    Det är viktigt att ha med ett radbyte mellan varje del.
+                
     Här är texten: {text}"""
 
     response = llm.invoke(prompt)
@@ -161,18 +166,16 @@ with col2:
 
         if "factcheck_results" not in st.session_state:
             st.session_state.factcheck_results = get_claim_search_output(text)
-            st.session_state.feedback_text = ""  # Skriv bara över vid första körning
+            st.session_state.factcheck_feedback_text = ""  # Skriv bara över vid första körning
+            
 
         if not st.session_state.factcheck_rendered:
-
             with st.container(border=False, height=900):
-                #for idx, claim_with_source in enumerate(st.session_state.factcheck_results):
-                #for idx, claim_with_source in enumerate(result_list):
                 for claim_with_source in st.session_state.factcheck_results:
                     claim = claim_with_source["claim"]
 
                     st.markdown(f"#### Påstående:\n{claim}")
-                    st.session_state.feedback_text += f"#### Påstående:\n{claim}\n\n"
+                    st.session_state.factcheck_feedback_text += f"#### Påstående:\n{claim}\n\n"
 
                     search_results = claim_with_source["results"]
 
@@ -186,7 +189,7 @@ with col2:
                         Regler:
                         - Utgå ifrån de delar av texten som aktivt svarar på påståendet, så andra orelaterade delar av texten bör ignoreras.
                         - Ta inte med någon ytterligare förklaring utan skriv bara ut meningarna som de är.
-                        - Om du hittar en exakt eller väldigt lik formulering som påståendet bör denna tas med.
+                        - Om du hittar en exakt eller väldigt lik formulering i källan som matchar påståendet bör denna tas med.
                         - Om direkta siffror nämns så bör du försöka hitta de exakta siffrorna i texten som hör ihop med formuleringen i påståendet.
                         - Generera inte nytt innehåll, utan plocka ut meningar i texten som överensstämmer mest med ämnet.
                         - Skriv ihop det som ett sammanhängande stycke i flytande text. 
@@ -199,13 +202,12 @@ with col2:
                     )
 
                     st.markdown("#### Relaterade källor:")
-                    st.session_state.feedback_text += "#### Relaterade källor:\n\n"
+                    st.session_state.factcheck_feedback_text += "#### Relaterade källor:\n\n"
                     for source in search_results:
                         title = source["title"]
                         url = source["url"]
                         content = source["content"]
 
-                        # Display title with a hyperlink to the URL
                         st.markdown(f"[🔗 {title}]({url})", unsafe_allow_html=True)
 
                         create_content_chain = summarize_prompt | llm | StrOutputParser()
@@ -221,10 +223,10 @@ with col2:
                         new_content = tokens
                         evidence += new_content
 
-                        st.session_state.feedback_text += f"[🔗 {title}]({url})\n\n"
-                        st.session_state.feedback_text += f"{tokens}\n\n"
+                        st.session_state.factcheck_feedback_text += f"[🔗 {title}]({url})\n\n"
+                        st.session_state.factcheck_feedback_text += f"{tokens}\n\n"
 
-                    st.session_state.feedback_text += "\n"
+                    st.session_state.factcheck_feedback_text += "\n"
 
                     fact_check_prompt = PromptTemplate.from_template(
                         """Här är ett påstående som ska kontrolleras: {claim}. 
@@ -240,7 +242,7 @@ with col2:
                         Påståendet stöds av källor  \n
                         Motivering: Påståendet bekräftas direkt av en eller fler källor.
 
-                        Om ingen information kan extraheras från någon av källorna, skriv då "Ingen information hittades i källorna."
+                        Det är viktigt att om ingen information kan extraheras från någon av källorna, skriv då "Ingen information hittades i källorna.", och absolut inget mer än det.
                         """
                     )
 
@@ -251,16 +253,16 @@ with col2:
 
                     st.markdown(f"#### Slutsats:\n{response}")
                     st.markdown("---")
-                    st.session_state.feedback_text += f"#### Slutsats:\n{response}\n\n"
+                    st.session_state.factcheck_feedback_text += f"#### Slutsats:\n{response}\n\n====================\n\n"
 
             st.session_state.factcheck_rendered = True
         else:
             # Just show previously generated feedback
-            st.markdown(st.session_state.feedback_text)
+            st.markdown(st.session_state.factcheck_feedback_text)
 
         download_button_placeholder.download_button(
             "Ladda ned feedback",
-            st.session_state.feedback_text,
+            "FAKTAKONTROLL\n\n" + st.session_state.factcheck_feedback_text,
             file_name="faktakontroll.txt",
             key="save_fact_check",
         )
@@ -269,26 +271,30 @@ with col2:
     elif selected_option == "Tonalitet":
         st.markdown("## **Tonalitetskontroll**")
 
-        st.session_state.feedback_text = ""
+        st.session_state.tonality_feedback_text = ""
 
         full_text = get_tonality_feedback(text)
 
-        st.session_state.feedback_text += "Tonalitetskontroll\n" + full_text + "\n\n"
-
-        download_button_placeholder.download_button(
-            "Ladda ned feedback",
-            st.session_state.feedback_text,
-            file_name="tonalitetsfeedback.txt",
-            key="save_tone_check",
-        )
+        # st.session_state.feedback_text += "Tonalitetskontroll\n" + full_text + "\n\n"
 
         if "tonality_blocks" not in st.session_state:
             raw_blocks = re.split(r"\n(?=\*\*Original\*\*:)", full_text.strip())
             st.session_state.tonality_blocks = raw_blocks
             st.session_state.show_full_text = False
 
-        block_limit_tone = 2
+        # Skriv varje block med tydlig separator i .txt-filen
+        st.session_state.tonality_feedback_text += "Tonalitetskontroll\n\n"
+        for block in st.session_state.tonality_blocks:
+            st.session_state.tonality_feedback_text += block.strip() + "\n\n====================\n\n"
 
+        download_button_placeholder.download_button(
+            "Ladda ned feedback",
+            st.session_state.tonality_feedback_text,
+            file_name="tonalitetsfeedback.txt",
+            key="save_tone_check",
+        )
+
+        block_limit_tone = 2
         # Display either preview or full output
         if st.session_state.show_full_text:
             for block in st.session_state.tonality_blocks:
