@@ -10,8 +10,8 @@ load_dotenv()
 tavily_key = os.getenv("TAVILY_API_KEY")
 
 search_tool = TavilySearch(
-    max_results=3,
-    include_domains=["wwf.se", "worldwildlife.org", "britannica.com", "nature.com", "https://artfakta.se/", "naturvardsverket.se", "slu.se", "nationalgeographic.com"],
+    max_results=2,
+    # include_domains=["wwf.se", "worldwildlife.org", "britannica.com", "nature.com", "https://artfakta.se/", "naturvardsverket.se", "slu.se", "nationalgeographic.com"],
 )
 
 
@@ -19,7 +19,7 @@ def search_and_extract(query, search_tool, extract_tool):
     search = search_tool.invoke({"query": query})
 
     # lägg till felhantering här
-    
+
     search_results = search["results"]
     refined_results = []
 

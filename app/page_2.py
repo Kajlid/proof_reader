@@ -48,7 +48,8 @@ st.markdown(
         display: none;  /* hide scrollbar */
         }
     </style>
-""", unsafe_allow_html=True,
+""",
+    unsafe_allow_html=True,
 )
 
 
@@ -56,7 +57,14 @@ st.markdown(
 top_col1, _, _ = st.columns([0.1, 0.8, 0.1])
 with top_col1:
     if st.button("Back"):
-        for key in ["factcheck_results", "factcheck_feedback_text", "tonality_feedback_text", "factcheck_rendered", "tonality_blocks", "show_full_text"]:
+        for key in [
+            "factcheck_results",
+            "factcheck_feedback_text",
+            "tonality_feedback_text",
+            "factcheck_rendered",
+            "tonality_blocks",
+            "show_full_text",
+        ]:
             if key in st.session_state:
                 del st.session_state[key]
         st.switch_page("home_page.py")
@@ -144,14 +152,14 @@ with col1:
         horizontal=True,
         label_visibility="collapsed",
     )
-    
+
     st.markdown(
         f"""
         <div class="custom-article-box">
             {st.session_state["doc_text"]}
         </div>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
 
@@ -166,8 +174,9 @@ with col2:
 
         if "factcheck_results" not in st.session_state:
             st.session_state.factcheck_results = get_claim_search_output(text)
-            st.session_state.factcheck_feedback_text = ""  # Skriv bara över vid första körning
-            
+            st.session_state.factcheck_feedback_text = (
+                ""  # Skriv bara över vid första körning
+            )
 
         if not st.session_state.factcheck_rendered:
             with st.container(border=False, height=900):
@@ -175,7 +184,9 @@ with col2:
                     claim = claim_with_source["claim"]
 
                     st.markdown(f"#### Påstående:\n{claim}")
-                    st.session_state.factcheck_feedback_text += f"#### Påstående:\n{claim}\n\n"
+                    st.session_state.factcheck_feedback_text += (
+                        f"#### Påstående:\n{claim}\n\n"
+                    )
 
                     search_results = claim_with_source["results"]
 
@@ -184,7 +195,7 @@ with col2:
                     summarize_prompt = PromptTemplate.from_template(
                         """Här är ett text: {content} och ett påstående: {claim}
                         
-                        Din uppgift är att plocka ut 2-3 hela meningar från denna texten. 
+                        Din uppgift är att plocka ut 2 hela meningar från denna texten. 
                         
                         Regler:
                         - Utgå ifrån de delar av texten som aktivt svarar på påståendet, så andra orelaterade delar av texten bör ignoreras.
@@ -202,7 +213,9 @@ with col2:
                     )
 
                     st.markdown("#### Relaterade källor:")
-                    st.session_state.factcheck_feedback_text += "#### Relaterade källor:\n\n"
+                    st.session_state.factcheck_feedback_text += (
+                        "#### Relaterade källor:\n\n"
+                    )
                     for source in search_results:
                         title = source["title"]
                         url = source["url"]
@@ -210,7 +223,9 @@ with col2:
 
                         st.markdown(f"[🔗 {title}]({url})", unsafe_allow_html=True)
 
-                        create_content_chain = summarize_prompt | llm | StrOutputParser()
+                        create_content_chain = (
+                            summarize_prompt | llm | StrOutputParser()
+                        )
 
                         output = (
                             st.empty()
@@ -223,7 +238,9 @@ with col2:
                         new_content = tokens
                         evidence += new_content
 
-                        st.session_state.factcheck_feedback_text += f"[🔗 {title}]({url})\n\n"
+                        st.session_state.factcheck_feedback_text += (
+                            f"[🔗 {title}]({url})\n\n"
+                        )
                         st.session_state.factcheck_feedback_text += f"{tokens}\n\n"
 
                     st.session_state.factcheck_feedback_text += "\n"
@@ -253,7 +270,9 @@ with col2:
 
                     st.markdown(f"#### Slutsats:\n{response}")
                     st.markdown("---")
-                    st.session_state.factcheck_feedback_text += f"#### Slutsats:\n{response}\n\n====================\n\n"
+                    st.session_state.factcheck_feedback_text += (
+                        f"#### Slutsats:\n{response}\n\n====================\n\n"
+                    )
 
             st.session_state.factcheck_rendered = True
         else:
@@ -285,7 +304,9 @@ with col2:
         # Skriv varje block med tydlig separator i .txt-filen
         st.session_state.tonality_feedback_text += "Tonalitetskontroll\n\n"
         for block in st.session_state.tonality_blocks:
-            st.session_state.tonality_feedback_text += block.strip() + "\n\n====================\n\n"
+            st.session_state.tonality_feedback_text += (
+                block.strip() + "\n\n====================\n\n"
+            )
 
         download_button_placeholder.download_button(
             "Ladda ned feedback",
