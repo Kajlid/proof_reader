@@ -1,8 +1,11 @@
-# Textgranskare (proofreader)
+# ProofReader
+
+[![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-%E2%9C%94%EF%B8%8F-brightgreen)](https://streamlit.io/)
 
 ## Project Description
 
-Textgranskaren aims to optimize the editorial process of WWF's magazine, by offering fact-checking and suggestions on tonality improvements. This project was made by the student team collaborating with WWF for AI Sweden's Public Innovation Summer Program 2025. 
+ProofReader aims to optimize the editorial process of WWF's magazine, by offering fact-checking and suggestions on tonality improvements. This project was made by a student team collaborating with WWF for AI Sweden's Public Innovation Summer Program 2025. 
 
 
 ## Prerequisites 
@@ -11,8 +14,8 @@ Textgranskaren aims to optimize the editorial process of WWF's magazine, by offe
 
 ## Environment Setup
 ```bash
-uv sync
 source .venv/bin/activate
+uv sync
 ```
 
 Create a `.env` file in the root directory with the following API keys:
