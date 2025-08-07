@@ -3,8 +3,6 @@ import docx
 
 st.set_page_config(layout="centered")
 
-# Main page content
-
 st.markdown(
     '<h1 style="text-align: center;"> ProofReader </h1>', unsafe_allow_html=True
 )
@@ -31,14 +29,14 @@ if data:
 
         style = para.style.name
 
-        # checking if Word's Heading style is used
+        # Check if Word's Heading style is used
         if style.startswith("Heading"):
             level = style.replace("Heading ", "")
             if level.isdigit():
                 full_text += f"\n\n## {'#' * int(level)} {text}"
                 continue
 
-        # If not, checking for manually styled heading
+        # If not, check for manually styled heading
         is_bold = all(run.bold for run in para.runs if run.text.strip())
         is_large = any(
             run.font.size and run.font.size.pt >= 16
@@ -58,12 +56,14 @@ if data:
         elif is_bold:
             full_text += f"\n\n**{text}**"
         elif is_large:
-            full_text += f"\n\n### {text}"  # Very big but not bold
+            full_text += f"\n\n### {text}"
         elif is_large_middle:
-            full_text += f"\n\n#### {text}"  # Large but not bold
+            full_text += f"\n\n#### {text}"
         else:
             full_text += f"\n\n{text}"
 
-    st.session_state["doc_text"] = full_text
+    st.session_state["doc_text"] = (
+        full_text  # Persist uploaded document in the current session state
+    )
 
-    st.switch_page("page_2.py")
+    st.switch_page("overview_page.py")

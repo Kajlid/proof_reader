@@ -28,6 +28,7 @@ if "factcheck_rendered" not in st.session_state:
 
 st.set_page_config(layout="wide")
 
+# CSS block for page interface
 st.markdown(
     """
     <style>
@@ -68,7 +69,6 @@ with top_col1:
             "tonality_feedback_text",
             "factcheck_rendered",
             "tonality_blocks",
-            "show_full_text",
         ]:
             if key in st.session_state:
                 del st.session_state[key]
@@ -87,6 +87,7 @@ st.markdown(
 st.markdown("<br><br>", unsafe_allow_html=True)
 
 
+# Extract claims from input text and rewrite them to queries, cache the result within current Streamlit session
 @st.cache_data(show_spinner="Söker och hämtar relaterade källor...")
 def get_claim_search_output(text):
     claim_extr_prompt = PromptTemplate.from_template("""
@@ -117,28 +118,29 @@ def get_claim_search_output(text):
             {text}
             \"\"\"
             """)
-    extract_sources_chain = claim_extr_prompt | llm | JsonOutputParser()
-    response = extract_sources_chain.invoke({"text": text})
+    extract_claims_chain = claim_extr_prompt | llm | JsonOutputParser()
+    response = extract_claims_chain.invoke({"text": text})
 
     result_list = search_claims(response)
 
     return result_list
 
 
+# Generate a summary of the given source that fits a certain claim, cache the result within current Streamlit session
 @st.cache_data(show_spinner=False)
 def get_evidence_summary(content, claim):
-    create_content_chain = summarize_prompt | llm | StrOutputParser()
-    return create_content_chain.invoke({"content": content, "claim": claim})
+    generate_summary_chain = summarize_prompt | llm | StrOutputParser()
+    return generate_summary_chain.invoke({"content": content, "claim": claim})
 
 
+# Compare claims with facts in generated summary from sources, cache the result within current Streamlit session
 @st.cache_data(show_spinner=False)
 def get_fact_check_judgment(claim, evidence):
     extract_sources_chain = fact_check_prompt | llm | StrOutputParser()
     return extract_sources_chain.invoke({"claim": claim, "evidence": evidence})
 
 
-# Det är viktigt att du inte börjar outputen med exempelvis "Här är en justering av texten, steg för steg:".
-# som har en avsändare som vill informera om natur, miljö och klimat på ett lättsamt men trovärdigt sätt
+# Conduct a tonality feedback of the given input text with suggested improvements, cache the result within current Streamlit session
 @st.cache_data(show_spinner="Genererar tonalitetsfeedback...")
 def get_tonality_feedback(text):
     prompt = f"""Jag vill att du hjälper mig att justera tonaliteten i en text. Målet är att få texten att låta mer naturlig, utan att ändra dess innebörd eller fakta. 
@@ -165,14 +167,6 @@ def get_tonality_feedback(text):
     return response.content
 
 
-# def show_more():
-#     st.session_state.show_full_text = True
-
-
-# def show_less():
-#     st.session_state.show_full_text = False
-
-
 col1, col2 = st.columns([2, 1])
 
 with col1:
@@ -183,6 +177,7 @@ with col1:
         label_visibility="collapsed",
     )
 
+    # Display uploaded word document
     st.markdown(
         f"""
         <div class="custom-article-box">
@@ -198,15 +193,13 @@ with col2:
 
     text = st.session_state["doc_text"]
 
-    # FAKTAKOLL
+    # FACT CHECK
     if selected_option == "Faktakontroll":
         st.markdown("## **Faktakontroll**")
 
         if "factcheck_results" not in st.session_state:
             st.session_state.factcheck_results = get_claim_search_output(text)
-            st.session_state.factcheck_feedback_text = (
-                ""  # Skriv bara över vid första körning
-            )
+            st.session_state.factcheck_feedback_text = ""
 
         if not st.session_state.factcheck_rendered:
             with st.container(border=False, height=900):
@@ -222,7 +215,6 @@ with col2:
 
                     evidence = ""
 
-                    # - Skriv meningarna utan citattecken.
                     summarize_prompt = PromptTemplate.from_template(
                         """Här är ett text: {content} och ett påstående: {claim}
                         
@@ -261,10 +253,6 @@ with col2:
                             st.empty()
                         )  # Create an empty placeholder for streamed output
 
-                        # tokens = create_content_chain.invoke(  # Replace with stream for streamed text generation
-                        #     {"content": content, "claim": claim}
-                        # )
-
                         tokens = get_evidence_summary(content, claim)
                         output.markdown(tokens)
                         new_content = tokens
@@ -296,9 +284,6 @@ with col2:
                     )
 
                     extract_sources_chain = fact_check_prompt | llm | StrOutputParser()
-                    # response = extract_sources_chain.invoke(
-                    #     {"claim": claim, "evidence": evidence}
-                    # )
 
                     response = get_fact_check_judgment(claim, evidence)
 
@@ -310,7 +295,7 @@ with col2:
 
             st.session_state.factcheck_rendered = True
         else:
-            # Just show previously generated feedback
+            # Show previously generated feedback
             st.markdown(st.session_state.factcheck_feedback_text)
 
         download_button_placeholder.download_button(
@@ -320,7 +305,7 @@ with col2:
             key="save_fact_check",
         )
 
-    # TONALITETSKOLL
+    # TONALITY CHECK
     elif selected_option == "Tonalitetsfeedback":
         st.markdown("## **Tonalitetsfeedback**")
 
@@ -328,14 +313,10 @@ with col2:
 
         full_text = get_tonality_feedback(text)
 
-        # st.session_state.feedback_text += "Tonalitetskontroll\n" + full_text + "\n\n"
-
         if "tonality_blocks" not in st.session_state:
             raw_blocks = re.split(r"\n(?=\*\*Original\*\*:)", full_text.strip())
             st.session_state.tonality_blocks = raw_blocks
-            st.session_state.show_full_text = False
 
-        # Skriv varje block med tydlig separator i .txt-filen
         st.session_state.tonality_feedback_text += "Tonalitetsfeedback\n\n"
         for block in st.session_state.tonality_blocks:
             st.session_state.tonality_feedback_text += (
@@ -349,7 +330,7 @@ with col2:
             key="save_tone_check",
         )
 
-        with st.container(border=False, height=900):  # Anpassa höjden efter behov
+        with st.container(border=False, height=900):
             for block in st.session_state.tonality_blocks:
                 st.markdown(block.strip())
                 st.markdown("---")
