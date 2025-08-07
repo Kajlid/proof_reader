@@ -4,14 +4,20 @@ import docx
 st.set_page_config(layout="centered")
 
 # Main page content
+
 st.markdown(
-    '<h1 style="text-align: center;"> Textgranskare </h1>', unsafe_allow_html=True
+    '<h1 style="text-align: center;"> ProofReader </h1>', unsafe_allow_html=True
+)
+
+st.markdown(
+    '<h3 style="text-align: center;"> Den digitala korrekturläsaren </h3>',
+    unsafe_allow_html=True,
 )
 
 st.markdown("<br><br><br><br>", unsafe_allow_html=True)
 
 
-data = st.file_uploader("Ladda upp ett Word dokument", type=["docx"])
+data = st.file_uploader("Ladda upp ett dokument i Word-format", type=["docx"])
 
 if data:
     doc = docx.Document(data)

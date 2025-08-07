@@ -14,7 +14,7 @@ load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
 
 genai.configure(api_key=api_key)
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", api_key=api_key)
+llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro", api_key=api_key, temperature=0)
 
 
 if "factcheck_feedback_text" not in st.session_state:
@@ -38,14 +38,19 @@ st.markdown(
         .custom-article-box {
         background-color: #fffdfd;  /* tropical yellow */
         padding: 1.5rem;
-        border-radius: 10px;
-        border: 1px solid #e08e79;
-        max-height: 850px;          /* adjust height as needed */
+        border-radius: 0.625rem;
+        border: 0.063rem solid #e08e79;
+        max-height: 53.125rem;          /* adjust height as needed */
         overflow-y: auto;
         }
 
         .custom-article-box::-webkit-scrollbar {
         display: none;  /* hide scrollbar */
+        }
+        
+         h1, h3 {
+            padding-top: 1rem;
+            margin_top: 0;
         }
     </style>
 """,
@@ -71,8 +76,15 @@ with top_col1:
 
 
 st.markdown(
-    '<h1 style="text-align: center;"> Textgranskare </h1>', unsafe_allow_html=True
+    '<h1 style="text-align: center;"> ProofReader </h1>', unsafe_allow_html=True
 )
+
+st.markdown(
+    '<h3 style="text-align: center;"> Den digitala korrekturläsaren </h3>',
+    unsafe_allow_html=True,
+)
+
+st.markdown("<br><br>", unsafe_allow_html=True)
 
 
 @st.cache_data(show_spinner="Söker och hämtar relaterade källor...")
@@ -113,34 +125,52 @@ def get_claim_search_output(text):
     return result_list
 
 
+@st.cache_data(show_spinner=False)
+def get_evidence_summary(content, claim):
+    create_content_chain = summarize_prompt | llm | StrOutputParser()
+    return create_content_chain.invoke({"content": content, "claim": claim})
+
+
+@st.cache_data(show_spinner=False)
+def get_fact_check_judgment(claim, evidence):
+    extract_sources_chain = fact_check_prompt | llm | StrOutputParser()
+    return extract_sources_chain.invoke({"claim": claim, "evidence": evidence})
+
+
+# Det är viktigt att du inte börjar outputen med exempelvis "Här är en justering av texten, steg för steg:".
+# som har en avsändare som vill informera om natur, miljö och klimat på ett lättsamt men trovärdigt sätt
 @st.cache_data(show_spinner="Genererar tonalitetsfeedback...")
 def get_tonality_feedback(text):
-    prompt = f"""Jag vill att du hjälper mig att justera tonaliteten i en text. Målet är att få texten att låta mer trovärdig och naturlig, utan att ändra dess innebörd eller fakta. 
-    Det är viktigt att du inte börjar outputen med exempelvis "Här är en justering av texten, steg för steg:". Följ de här fyra stegen:
+    prompt = f"""Jag vill att du hjälper mig att justera tonaliteten i en text. Målet är att få texten att låta mer naturlig, utan att ändra dess innebörd eller fakta. 
+        **Viktigt:** Börja **direkt** med första identifierade formuleringen. **Skriv inte någon inledande kommentar, sammanfattning eller förklaring**. Det gäller även fraser som "Här är..." eller "Nedan följer...".  
+        Följ dessa steg:
 
-    1.Identifiera formuleringar som behöver förtydligas, samt formuleringar som har ett dåligt flyt eller en för slapp ton. Leta efter ord eller uttryck som innehåller överdrifter eller personliga värderingar.
-    2.Förklara kort varför varje uttryck du identifierar är otydligt eller har dåligt flyt.
-    3.Föreslå en omskrivning som gör uttrycket mer sammanhängande eller trovärdigt. Innehållet och betydelsen ska behållas.
-    4.Presentera varje fall i exakt detta format:
+        -  Identifiera formuleringar som behöver förtydligas, samt formuleringar som har ett dåligt flyt eller är inkonsekventa i jämförelse med resten av texten. 
+        -  Om formuleringana innehåller subjektiva värderingar är det tillåtet, så länge det passar i sammanhanget.
+        -  Kommentera ifall påståendet innehåller ord eller beskrivningar som kan ses som överdrifter.
+        -  Lämna inga kommentarer till formuleringar med citatstreck. 
+        -  Förklara kort varför varje uttryck du identifierar är otydligt, har en konstig grammatisk uppbyggnad eller har dåligt flyt.
+        -  Föreslå en omskrivning som är bättre formulerad utifrån din kommentar. Innehållet och betydelsen ska behållas.
+        -  Presentera varje fall i exakt detta format:
 
-    **Original**: [originalformulering] \n
-    **Kommentar**: [kort förklaring till varför det är subjektivt] \n
-    **Omskrivning**: [neutral version] \n
-        
-    Det är viktigt att ha med ett radbyte mellan varje del.
-                
-    Här är texten: {text}"""
+        **Original**: [originalformulering] \n
+        **Kommentar**: [kort förklaring till vad som kan förbättras med formuleringen] \n
+        **Omskrivning**: [förbättrad formulering] \n
+            
+        Det är viktigt att ha med ett radbyte mellan varje del.
+                    
+        Här är texten: {text}"""
 
     response = llm.invoke(prompt)
     return response.content
 
 
-def show_more():
-    st.session_state.show_full_text = True
+# def show_more():
+#     st.session_state.show_full_text = True
 
 
-def show_less():
-    st.session_state.show_full_text = False
+# def show_less():
+#     st.session_state.show_full_text = False
 
 
 col1, col2 = st.columns([2, 1])
@@ -148,7 +178,7 @@ col1, col2 = st.columns([2, 1])
 with col1:
     selected_option = st.radio(
         "Välj granskningstyp",
-        ["Faktakontroll", "Tonalitet"],
+        ["Faktakontroll", "Tonalitetsfeedback"],
         horizontal=True,
         label_visibility="collapsed",
     )
@@ -192,10 +222,11 @@ with col2:
 
                     evidence = ""
 
+                    # - Skriv meningarna utan citattecken.
                     summarize_prompt = PromptTemplate.from_template(
                         """Här är ett text: {content} och ett påstående: {claim}
                         
-                        Din uppgift är att plocka ut 2 hela meningar från denna texten. 
+                        Din uppgift är att plocka ut 2 hela meningar från denna texten.
                         
                         Regler:
                         - Utgå ifrån de delar av texten som aktivt svarar på påståendet, så andra orelaterade delar av texten bör ignoreras.
@@ -203,12 +234,11 @@ with col2:
                         - Om du hittar en exakt eller väldigt lik formulering i källan som matchar påståendet bör denna tas med.
                         - Om direkta siffror nämns så bör du försöka hitta de exakta siffrorna i texten som hör ihop med formuleringen i påståendet.
                         - Generera inte nytt innehåll, utan plocka ut meningar i texten som överensstämmer mest med ämnet.
-                        - Skriv ihop det som ett sammanhängande stycke i flytande text. 
+                        - Skriv ihop det som ett sammanhängande stycke i flytande text, och sätt citattecken (" ") runtom hela texten (alltså inte endast för varje mening för sig). 
                         - Skriv *INTE* ut resultatet som en punktlista.
                         - Skriv *INTE* ut det returnerade resultatet som numrerade listor. 
-                        - Skriv meningarna utan citattecken. 
-                        - Om du inte kan extrahera meningar, lämna då svaret som en tom sträng, utan kommentar.
-                        - En källa räknas inte som relevant text.
+                        - Om du inte kan extrahera meningar, lämna då svaret som en tom sträng, utan kommentar och utan citattecken ("").
+                        - En annan källa som nämns i texten räknas inte som relevant text.
                         """
                     )
 
@@ -231,9 +261,11 @@ with col2:
                             st.empty()
                         )  # Create an empty placeholder for streamed output
 
-                        tokens = create_content_chain.invoke(  # Replace with stream for streamed text generation
-                            {"content": content, "claim": claim}
-                        )
+                        # tokens = create_content_chain.invoke(  # Replace with stream for streamed text generation
+                        #     {"content": content, "claim": claim}
+                        # )
+
+                        tokens = get_evidence_summary(content, claim)
                         output.markdown(tokens)
                         new_content = tokens
                         evidence += new_content
@@ -264,9 +296,11 @@ with col2:
                     )
 
                     extract_sources_chain = fact_check_prompt | llm | StrOutputParser()
-                    response = extract_sources_chain.invoke(
-                        {"claim": claim, "evidence": evidence}
-                    )
+                    # response = extract_sources_chain.invoke(
+                    #     {"claim": claim, "evidence": evidence}
+                    # )
+
+                    response = get_fact_check_judgment(claim, evidence)
 
                     st.markdown(f"#### Slutsats:\n{response}")
                     st.markdown("---")
@@ -287,8 +321,8 @@ with col2:
         )
 
     # TONALITETSKOLL
-    elif selected_option == "Tonalitet":
-        st.markdown("## **Tonalitetskontroll**")
+    elif selected_option == "Tonalitetsfeedback":
+        st.markdown("## **Tonalitetsfeedback**")
 
         st.session_state.tonality_feedback_text = ""
 
@@ -302,7 +336,7 @@ with col2:
             st.session_state.show_full_text = False
 
         # Skriv varje block med tydlig separator i .txt-filen
-        st.session_state.tonality_feedback_text += "Tonalitetskontroll\n\n"
+        st.session_state.tonality_feedback_text += "Tonalitetsfeedback\n\n"
         for block in st.session_state.tonality_blocks:
             st.session_state.tonality_feedback_text += (
                 block.strip() + "\n\n====================\n\n"
@@ -315,15 +349,7 @@ with col2:
             key="save_tone_check",
         )
 
-        block_limit_tone = 2
-        # Display either preview or full output
-        if st.session_state.show_full_text:
+        with st.container(border=False, height=900):  # Anpassa höjden efter behov
             for block in st.session_state.tonality_blocks:
                 st.markdown(block.strip())
                 st.markdown("---")
-            st.button("Visa mindre", on_click=show_less)
-        else:
-            for block in st.session_state.tonality_blocks[:block_limit_tone]:
-                st.markdown(block.strip())
-                st.markdown("---")
-            st.button("Visa mer", on_click=show_more)
